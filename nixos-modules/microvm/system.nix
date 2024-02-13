@@ -1,4 +1,4 @@
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, modulesPath, ... }:
 
 {
   config = lib.mkIf config.microvm.guest.enable {
@@ -6,7 +6,10 @@
       {assertion = (config.microvm.writableStoreOverlay != null) -> (!config.nix.optimise.automatic && !config.nix.settings.auto-optimise-store);
        message = ''
          `nix.optimise.automatic` and `nix.settings.auto-optimise-store` do not work with `microvm.writableStoreOverlay`.
-       '';}];
+       '';}
+       {assertion = (builtins.elem "erofs" config.boot.blacklistedKernelModules);
+       message = ''erofs can't be part of `boot.blacklistedKernelModules`'';}
+     ];
 
 
     boot.loader.grub.enable = false;
@@ -32,10 +35,30 @@
       "init=${config.system.build.toplevel}/init"
     ];
 
+    # adding it to the statement below proves to be quite
+    # hard as mkForce would forcefully remove every other
+    # blacklisted module the user might provide. The issue is similar to:
+    # https://github.com/NixOS/nixpkgs/issues/32405#issuecomment-1327920326
+    # As for now this is being handled by an additional assert statement,
+    # but that is neither pretty nor does it give the user the required
+    # flexibility. The only option I can think of would be to 
+    # do something like ( import ${modulesPath}/profiles/hardend.nix" {...} )
+    # and then removing element from the list in the the boot.blacklistedKernelModules
+    # attribute as in { config.boot.blacklistedKernelModules  }
+
     # modules that consume boot time but have rare use-cases
     boot.blacklistedKernelModules = [
       "rfkill" "intel_pstate"
     ] ++ lib.optional (!config.microvm.graphics.enable) "drm";
+
+
+    # erofs is needed for mounting /nix/store during the vm's booting
+    # process. The nixos hardened profile module however blacklists
+    # it saying its not sufficiently updated.
+    imports = lib.optionals (config.microvm.guestSystemHardening) [
+      "${modulesPath}/profiles/hardened.nix"
+    ];
+
 
     systemd =
       let

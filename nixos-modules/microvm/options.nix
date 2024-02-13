@@ -422,6 +422,14 @@ in
       '';
     };
 
+    guestSystemHardening = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to compile the guest virtual machine with the nixpkgs/NixOS hardened profile.
+      '';
+    };
+
     runner = mkOption {
       description = "Generated Hypervisor runner for this NixOS";
       type = with types; attrsOf package;
